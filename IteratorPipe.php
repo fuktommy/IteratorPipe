@@ -107,12 +107,19 @@ class IteratorPipe implements IteratorAggregate
 
     /**
      * Make new instance with the pipe.
-     * @param IteratorPipe_command $command
+     * @param IteratorPipe_Command|callable $command
      * @return IteratorPipe
      */
-    public function pipe(IteratorPipe_Command $command)
+    public function pipe($command)
     {
-        return new self($this, $command);
+        if ($command instanceof IteratorPipe_Command) {
+            return new self($this, $command);
+        } elseif (is_callable($command)) {
+            return new self($this,
+                            new IteratorPipe_CallbackCommand($command));
+        } else {
+            throw new InvalidArgumentException("{$command} is not command");
+        }
     }
 
     /**
@@ -122,7 +129,13 @@ class IteratorPipe implements IteratorAggregate
      */
     public function filter($callback)
     {
-        return $this->pipe(new IteratorPipe_FilterCommand($callback));
+        return $this->pipe(function ($key, $value) use ($callback) {
+            if ((bool)$callback($key, $value) === true) {
+                return array($key => $value);
+            } else {
+                return array();
+            }
+        });
     }
 
     /**
@@ -132,7 +145,18 @@ class IteratorPipe implements IteratorAggregate
      */
     public function map($callback)
     {
-        return $this->pipe(new IteratorPipe_MapCommand($callback));
+        return $this->pipe(function ($key, $value) use ($callback) {
+            return array($key => $callback($key, $value));
+        });
+    }
+
+    /**
+     * Renumber keys.
+     * @return IteratorPipe
+     */
+    public function renumber()
+    {
+        return $this->pipe(new IteratorPipe_RenumberCommand());
     }
 }
 
@@ -273,31 +297,19 @@ interface IteratorPipe_Command
 
 
 /**
- * Command to filter.
+ * Renumber index command.
  * @internal
  */
-class IteratorPipe_FilterCommand implements IteratorPipe_Command
+class IteratorPipe_RenumberCommand implements IteratorPipe_Command
 {
     /**
-     * @var callable
+     * @var int
      */
-    private $_callback;
-
-    /**
-     * @param $callback callable
-     */
-    public function __construct($callback)
-    {
-        $this->_callback = $callback;
-    }
+    private $_count = 0;
 
     public function execute($key, $value)
     {
-        if (call_user_func($this->_callback, $key, $value)) {
-            return array($key => $value);
-        } else {
-            return array();
-        }
+        return array($this->_count++ => $value);
     }
 
     public function finalize()
@@ -308,10 +320,10 @@ class IteratorPipe_FilterCommand implements IteratorPipe_Command
 
 
 /**
- * Command to map.
+ * Command using callback.
  * @internal
  */
-class IteratorPipe_MapCommand implements IteratorPipe_Command
+class IteratorPipe_CallbackCommand implements IteratorPipe_Command
 {
     /**
      * @var callable
@@ -328,7 +340,7 @@ class IteratorPipe_MapCommand implements IteratorPipe_Command
 
     public function execute($key, $value)
     {
-        return array($key => call_user_func($this->_callback, $key, $value));
+        return call_user_func($this->_callback, $key, $value);
     }
 
     public function finalize()

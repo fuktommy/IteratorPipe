@@ -82,6 +82,14 @@ class IteratorPipeTest extends PHPUnit_Framework_TestCase
         $this->assertSame(array(3), $pipe->toArray());
     }
 
+    public function testCallback()
+    {
+        $pipe = IteratorPipe::factory(array(11, 12, 13))
+              ->pipe(function ($k, $v) { return array($k => $v * 2); });
+        $this->assertSame(array(22, 24, 26), $pipe->toArray());
+
+    }
+
     public function testWithAddOne()
     {
         $source = array(
@@ -132,4 +140,11 @@ class IteratorPipeTest extends PHPUnit_Framework_TestCase
         $this->assertSame(array(1 => 6, 3 => 7), $pipe->toArray());
     }
 
+    public function testRenumber()
+    {
+        $pipe = IteratorPipe::factory(array(11, 12, 13, 14))
+              ->filter(function($k, $v) {return $v % 2 === 0; })
+              ->renumber();
+        $this->assertSame(array(12, 14), $pipe->toArray());
+    }
 }
